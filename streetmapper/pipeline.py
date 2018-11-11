@@ -1,16 +1,39 @@
 import pandas as pd
 import numpy as np
 import geopandas as gpd
-import logging
-from shapely.geometry import Polygon, LineString, MultiPolygon, Point, mapping
+from shapely.geometry import Polygon, LineString, Point, mapping
 from tqdm import tqdm
 import rtree
 
-# TODO
-logger = logging.getLogger('garbageman')
+
+def bldgs_on_block(bldgs, block, include_multimatches=False):
+    """
+    Returns the buildings that correspond with a given block.
+
+    Parameters
+    ----------
+    bldgs: gpd.GeoDataFrame
+        A tabular `GeoDataFrame` whose `geometry` consists of building footprints in the area of interest.
+
+    block: gpd.GeoSeries
+        A `GeoSeries` whose `geometry` is the block of interest.
+
+    include_multimatches: boolean
+        Whether or not to include buildings that are not fully contained with in the given block, e.g. those which span
+        multiple blocks. This is usually only possible due to errors in the dataset. Defaults to `True`.
+
+        Note that the contains operation, which is used when `False`, is slower than the intersects operation, which is
+        used when `True`.
+    """
+    if include_multimatches:
+        # TODO: this doesn't work?
+        # return bldgs[block.intersects(bldgs)]
+        raise NotImplementedError
+    else:
+        return bldgs[block.contains(bldgs)]
 
 
-def join_bldgs_blocks(buildings, blocks, building_id_key="sf16_BldgID"):
+def join_bldgs_blocks(bldgs, blocks, bldg_uid_col='bldg_uid', block_uid_col='block_uid'):
     """
     Performs a geo-spatial join on buildings and blocks. Each of the `buildings` searches for `blocks` that it
     intersects with. In a good case, the building is found to be located within a particular block. In a bad case, the
@@ -20,17 +43,28 @@ def join_bldgs_blocks(buildings, blocks, building_id_key="sf16_BldgID"):
     This function therefore returns a tuple of three items: `matches` for buildings uniquely joined to blocks,
     `multimatches` for buildings joined to multiple blocks, a `nonmatches` for buildings joined to no blocks.
 
+    These bad cases are inevitable, and will generally occur when city blocks are rewritten. This will tend to mean
+    around construction zones. The greater the difference in the timestamp between the buildings dataset and the blocks
+    dataset, the greater the risk of match degradation.
+
+    > Warning: buildings which touch the boundary of their block will likely be declared a multi-match due to the
+    semantics of the intersection operation.
+
     Parameters
     ----------
-    buildings: gpd.GeoDataFrame
+    bldgs: gpd.GeoDataFrame
         A tabular `GeoDataFrame` whose `geometry` consists of building footprints in the area of interest.
 
     blocks: gpd.GeoDataFrame
         A tabular `GeoDataFrame` whose `geometry` corresponds with all block footprints in the area of interest.
 
-    building_id_key: str, default "sf16_BldgID"
-        A unique ID for the buildings. This field must be present in the `buildings` dataset, and it must be uniquely
-        keyed.
+    bldg_uid_col: str
+        The unique ID column for the buildings. This field must be present in the `buildings` dataset, and it must
+        be uniquely keyed.
+
+    block_uid_col: str
+        The unique ID column for the blocks. This field must be present in the `vlocks` dataset, and it must be
+        uniquely keyed.
 
     Returns
     -------
@@ -39,14 +73,16 @@ def join_bldgs_blocks(buildings, blocks, building_id_key="sf16_BldgID"):
         element is buildings that span multiple blocks, and the third is buildings that span no blocks (at least
         according to the data given).
     """
-    # logger.info("Geospatial join of buildings and blocks in progress.")
-    all_matches = (gpd.sjoin(buildings, blocks, how="left", op='intersects')
-                   .rename(columns={'index_right': 'index_block'})
-                   .set_index("index"))
-    matches = all_matches.groupby(building_id_key).filter(lambda df: len(df) == 1).reset_index()
-    multimatches = all_matches.groupby(building_id_key).filter(lambda df: len(df) > 1).reset_index()
+    if len(bldgs) == 0 or len(blocks) == 0:
+        return gpd.GeoDataFrame(), gpd.GeoDataFrame(), gpd.GeoDataFrame()
+
+    all_matches = (gpd.sjoin(bldgs, blocks, how="left", op='intersects'))
+
     nonmatches = all_matches[pd.isnull(all_matches['index_right'])]
-    # logger.info("Geospatial join of buildings and blocks done.")
+
+    all_matches = all_matches.drop(columns=['index_right'])
+    matches = all_matches.groupby(bldg_uid_col).filter(lambda df: sum(df[block_uid_col].notnull()) == 1).reset_index()
+    multimatches = all_matches.groupby(bldg_uid_col).filter(lambda df: len(df) > 1).reset_index()
 
     return matches, multimatches, nonmatches
 
@@ -66,6 +102,7 @@ def _simplify(shp, tol=0.05):
     return simp
 
 
+# TODO: continue implementing tests and refactoring the API surface from here!
 def blockfaces_for_block(block, tol=0.05):
     """
     Given a `block` footprint as a geometry, returns a breakdown of that block into individual blockface segments.
@@ -313,27 +350,6 @@ def get_block_data(block_id, street_segments, blockfaces, buildings):
     bf = blockfaces.pipe(filter_on_block_id(block_id))
     bldgs = buildings.pipe(filter_on_block_id(block_id))
     return ss, bf, bldgs
-
-
-def simplify_linestring(inp, decimals=4):
-    """Helper function that simplifies a Linestring down to a certain precision. Not currently used."""
-    inp = inp.convex_hull
-    coords = np.round(mapping(inp)['coordinates'], decimals=decimals)
-    out = LineString(coords)
-    return out
-
-
-def simplify_bldg(bldg):
-    """Helper function that simplifies a Polygon down to a certain precision. Not currently used."""
-    if isinstance(bldg, MultiPolygon):
-        bldg = bldg.buffer(0)
-
-    if isinstance(bldg, MultiPolygon):
-        raise NotImplemented  # TODO
-
-    bldg = Polygon(bldg)
-
-    return bldg
 
 
 def collect_strides(point_observations):
