@@ -67,7 +67,7 @@ class TestJoinBldgsBlocks(unittest.TestCase):
 
 class TestBldgsOnBlock(unittest.TestCase):
     def setUp(self):
-        self.block = gpd.GeoSeries(Polygon(((0, 0), (0, 2), (2, 2), (2, 0))))
+        self.block = Polygon(((0, 0), (0, 2), (2, 2), (2, 0)))
 
     def testSimple(self):
         bldgs = gpd.GeoDataFrame(geometry=[
@@ -92,3 +92,10 @@ class TestBldgsOnBlock(unittest.TestCase):
     #     ])
     #     result = streetmapper.pipeline.bldgs_on_block(bldgs, self.block, include_multimatches=True)
     #     assert len(result) == 2
+
+
+class TestBlockfacesForBlock(unittest.TestCase):
+    def testSimple(self):
+        block = Polygon(((0, 0), (0, 2), (2, 2), (2, 0)))
+        bfs = streetmapper.pipeline.blockfaces_for_block(block, 1)
+        # TODO

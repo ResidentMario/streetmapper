@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import geopandas as gpd
-from shapely.geometry import Polygon, LineString, Point, mapping
+from shapely.geometry import Polygon, MultiPolygon, LineString, Point, mapping
 from tqdm import tqdm
 import rtree
 
@@ -15,8 +15,8 @@ def bldgs_on_block(bldgs, block, include_multimatches=False):
     bldgs: gpd.GeoDataFrame
         A tabular `GeoDataFrame` whose `geometry` consists of building footprints in the area of interest.
 
-    block: gpd.GeoSeries
-        A `GeoSeries` whose `geometry` is the block of interest.
+    block: Polygon or MultiPolygon
+        The block geometry as a `shapely` object.
 
     include_multimatches: boolean
         Whether or not to include buildings that are not fully contained with in the given block, e.g. those which span
@@ -24,7 +24,15 @@ def bldgs_on_block(bldgs, block, include_multimatches=False):
 
         Note that the contains operation, which is used when `False`, is slower than the intersects operation, which is
         used when `True`.
+
+    Returns
+    ------
+    gpd.GeoDataFrame
+        The subset of `bldgs` which match the given `block`.
     """
+    # convert to a GeoSeries to allow broadcasting
+    block = gpd.GeoSeries(block)
+
     if include_multimatches:
         # TODO: this doesn't work?
         # return bldgs[block.intersects(bldgs)]
@@ -103,7 +111,7 @@ def _simplify(shp, tol=0.05):
 
 
 # TODO: continue implementing tests and refactoring the API surface from here!
-def blockfaces_for_block(block, tol=0.05):
+def blockfaces_for_block(block, block_uid, tol=0.05, block_uid_col='block_uid'):
     """
     Given a `block` footprint as a geometry, returns a breakdown of that block into individual blockface segments.
 
@@ -114,19 +122,26 @@ def blockfaces_for_block(block, tol=0.05):
 
     Parameters
     ----------
-    block: gpd.GeoSeries
+    block: Polygon
         Data for a single block.
+
+    block_uid: str
+        The unique ID identifying this block.
+
     tol: float
         The maximum simplification threshold. Blockfaces will be determined using a simplified representation of the
         block with at most this much inaccuracy with respect to the "real thing". Higher tolerances result in fewer but
         more complex blockfaces. Value is a float ratio out of 1.
+
+    block_uid_col: str
+        The unique ID column for the blocks. This field must be present in the `block`, and it must be uniquely keyed.
 
     Returns
     -------
     out: gpd.GeoDataFrame
         Data and geometries corresponding with each blockface.
     """
-    orig = block.geometry.buffer(0)  # MultiPolygon -> Polygon
+    orig = block.buffer(0)  # MultiPolygon -> Polygon
     simp = _simplify(orig, tol=tol)
 
     orig_coords = mapping(orig)['coordinates'][0]
@@ -151,18 +166,16 @@ def blockfaces_for_block(block, tol=0.05):
         orig_out.append(orig_coords[orig_blockface_start_coord_idx:orig_blockface_end_coord_idx])
 
     # id will be a mutation of the block id
-    block_id = block.geoid10
+    blockface_uid_col = f'{block_uid_col}_n'
 
     out = []
     from shapely.geometry import LineString
 
-    # frame id, block id, original geometry, and simplified geometry
-    # TODO: allow arbitrary ID fields.
     for n, (simp_blockface_coord_seq, orig_blockface_coord_seq) in enumerate(zip(simp_out, orig_out)):
         blockface_num = n + 1
         out.append({
-            "geoid10_n": f"{block_id}_{blockface_num}",
-            "geoid10": block_id,
+            blockface_uid_col: f"{block_uid}_{blockface_num}",
+            block_uid_col: block_uid,
             "simplified_geometry": LineString(simp_blockface_coord_seq),
             "geometry": LineString(orig_blockface_coord_seq)
         })
