@@ -3,7 +3,7 @@ setup(
     name='streetmapper',
     packages=['streetmapper'],
     install_requires=['pandas', 'geopandas', 'rtree', 'tqdm'],
-    py_modules=['pipeline', 'utils'],
+    py_modules=['pipeline', 'utils', 'ops'],
     version='0.0.1',
     description='Data processing and visualization utilities for working with trash data',
     author='Aleksey Bilogur',
