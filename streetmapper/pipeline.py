@@ -443,7 +443,10 @@ def _distance(line, point):
     return dist
 
 
-def points_on_frontages(points, frontages):
+def points_on_frontages(
+    points, frontages, frontage_uid_col='frontage_id', frontage_block_uid_col='block_id',
+    frontage_building_uid_col='building_id', frontage_blockface_uid_col='blockface_id'
+):
     """
     Given a sequence of `points` and `frontages`, assigns points to frontages in the dataset.
     """
@@ -457,7 +460,7 @@ def points_on_frontages(points, frontages):
     idxs = points.geometry.map(lambda g: list(index.nearest(g.bounds, 5)))
     frontage_groups = idxs.map(lambda idx_group: frontages.iloc[idx_group]).values
 
-    out = []
+    new = []
     for i in range(len(points)):
         point = points.iloc[i]
         frontage_group = frontage_groups[i]
@@ -465,7 +468,20 @@ def points_on_frontages(points, frontages):
         distances = [_distance(frontage.geometry, point.geometry) for _, frontage 
                      in frontage_group.iterrows()]
         frontage_idx = np.argmin(distances)
-        out.append(frontages.iloc[frontage_group.index[frontage_idx]])
+        frontage = frontages.iloc[frontage_group.index[frontage_idx]]
+        new.append(pd.DataFrame(
+            [{
+                'frontage_id': frontage[frontage_uid_col],
+                'block_id': frontage[frontage_block_uid_col],
+                'building_id': frontage[frontage_building_uid_col],
+                'blockface_id': frontage[frontage_blockface_uid_col]
+            }]
+        ))
 
-    # TODO: cleaner merge op
-    return pd.concat(out, axis='columns').T
+    new = pd.concat(new, axis='rows')
+    return points.assign(
+        frontage_id=new[frontage_uid_col].values,
+        block_id=new[frontage_block_uid_col].values,
+        building_id=new[frontage_building_uid_col].values,
+        blockface_id=new[frontage_blockface_uid_col].values
+    )
