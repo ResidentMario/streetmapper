@@ -4,3 +4,4 @@ streetmapper.egg-info/
 .DS_Store
 .idea/
 __pycache__/
+.vscode/

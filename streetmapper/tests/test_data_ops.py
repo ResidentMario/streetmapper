@@ -84,18 +84,3 @@ class TestBldgsOnBlock(unittest.TestCase):
         ])
         result = streetmapper.pipeline.bldgs_on_block(bldgs, self.block, include_multimatches=False)
         assert len(result) == 1
-
-    # def testMulitmatchOn(self):
-    #     bldgs = gpd.GeoDataFrame(geometry=[
-    #         Polygon(((0, 0), (0, 1), (1, 1), (1, 0))),  # in
-    #         Polygon(((1, 1), (5, 1), (5, 5), (1, 5)))  # through
-    #     ])
-    #     result = streetmapper.pipeline.bldgs_on_block(bldgs, self.block, include_multimatches=True)
-    #     assert len(result) == 2
-
-
-class TestBlockfacesForBlock(unittest.TestCase):
-    def testSimple(self):
-        block = Polygon(((0, 0), (0, 2), (2, 2), (2, 0)))
-        bfs = streetmapper.pipeline.blockfaces_for_block(block, 1)
-        # TODO
