@@ -383,7 +383,7 @@ def _frontages_on_blockface(
 def frontages_on_blockfaces(
     blocks, blockfaces, buildings, buildings_uid_col='building_id', blocks_uid_col='block_id',
     buildings_block_uid_col='block_id', blockfaces_block_uid_col='block_id',
-    blockfaces_uid_col='blockface_id'
+    blockfaces_uid_col='blockface_id', step_size=0.01
 ):
     """
     Given the set of available data, calculates building frontages for the given blocks.
@@ -415,7 +415,8 @@ def frontages_on_blockfaces(
         for _, blockface_target in blockface_targets.iterrows():
             result = _frontages_on_blockface(
                 building_targets, blockface_target, buildings_uid_col=buildings_uid_col,
-                blocks_uid_col=blocks_uid_col, blockfaces_uid_col=blockfaces_uid_col
+                blocks_uid_col=blocks_uid_col, blockfaces_uid_col=blockfaces_uid_col,
+                step_size=step_size
             )
             frontages.append(result)
 
